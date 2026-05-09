@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ClaudeViewer</RootNamespace>
+    <AssemblyName>ClaudeViewer</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+
+  <!--
+    DevExpress version: bump to whatever is installed on this machine.
+    Using DevExpress.Win (meta-package) so DockManager + DocumentManager + Grid
+    all come in one reference. If you prefer thin-slicing, replace with:
+      DevExpress.Win.Navigation, DevExpress.Win.Docking, DevExpress.Win.Grid
+  -->
+  <ItemGroup>
+    <PackageReference Include="DevExpress.Win" Version="25.2.5" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+    <PackageReference Include="Markdig" Version="0.37.0" />
+  </ItemGroup>
+
+</Project>
