@@ -1,131 +1,130 @@
 # Session Handoff
 
 **Last session:** 2026-05-09
-**Status:** Scaffold + compare mode pushed to private GitHub repo. Builds clean, launches clean.
+**Status:** Scaffold + folder picker + compare mode pushed to `MBrekhof/ClaudeViewer` (private). Builds clean, launches clean.
+**Repo:** https://github.com/MBrekhof/ClaudeViewer · `main` · last commit `015eede`
 
-## Latest delta — compare mode
+## What this is
 
-- New `Controls/ArtifactPanel.cs` — extracted the WebView2 + Markdown
-  rendering logic out of `ArtifactForm` into a reusable `UserControl` so it
-  can be embedded in any container (e.g. a split view).
-- `Controls/ArtifactForm.cs` is now a thin `XtraForm` host around a single
-  `ArtifactPanel`. Public surface is unchanged.
-- New `Controls/CompareForm.cs` — `XtraForm` with a stock
-  `SplitContainer` (`Orientation.Vertical` → splitter is vertical, panels
-  are left/right). Two `ArtifactPanel`s with small file-name/title labels
-  above each pane. Splitter centred at `Width / 2` on first show.
-- `MainForm`:
-  - Grid now `MultiSelect = true`, `MultiSelectMode = RowSelect`.
-  - "Compare" button added to the header strip, leftmost of the right group
-    next to "Change…". Disabled until exactly 2 rows are selected; tooltip
-    explains the gating in both states.
-  - `_openCompareTabs` list parallels `_openTabs`. `OnArtifactUpdated`
-    iterates open compare tabs and refreshes the side(s) that match the
-    changed file.
-  - `XtraMessageBox` belt-and-braces if `CompareSelected()` runs without 2
-    rows (shouldn't happen given the gating, but cheap insurance).
+A WinForms / DevExpress companion app for Claude Code. Watches a folder
+for HTML / Markdown artifacts and renders them in tabbed WebView2 panes,
+with a side-by-side compare mode for two files at once.
 
-### Not yet visually verified
-
-- That the split is actually left/right (the code says so, but I have not
-  eyeballed it — flip `Orientation` if it comes up top/bottom).
-- That the Compare button enable/disable transitions cleanly with grid
-  selection changes in practice.
-- Live-reload through the compare path end-to-end — needs Claude Code
-  pointed at the watched folder + a re-write of one of two compared files.
-
-## What exists
-
-A WinForms / DevExpress companion app for Claude Code that watches a folder
-for HTML / Markdown artifacts and renders them in tabbed WebView2 panes.
-
-### Files in this commit (`0ab7798`) and the README/TODO commit
+## Current file layout
 
 ```
 ClaudeViewer/
 ├── ClaudeViewer.sln
-├── README.md
-├── TODO.md
-├── SESSION_HANDOFF.md
+├── README.md · TODO.md · SESSION_HANDOFF.md
 ├── .gitignore                       (bin/, obj/, *.user, .vs/, *.suo, *.bak)
 └── ClaudeViewer/
-    ├── ClaudeViewer.csproj          (net10.0-windows, DevExpress.Win 25.2.5,
-    │                                 Microsoft.Web.WebView2 1.0.2792.45,
-    │                                 Markdig 0.37.0)
-    ├── app.manifest                 (asInvoker; HighDpi handled via csproj)
+    ├── ClaudeViewer.csproj          (net10.0-windows; DevExpress.Win 25.2.5;
+    │                                 Microsoft.Web.WebView2 1.0.2792.45;
+    │                                 Markdig 0.37.0; ApplicationHighDpiMode = PerMonitorV2)
+    ├── app.manifest                 (asInvoker; DPI handled via csproj, not manifest)
     ├── Program.cs                   (skin: WXICompact)
-    ├── MainForm.cs                  (DockManager left + DocumentManager
-    │                                 tabbed view + GridControl bound to
-    │                                 ArtifactWatcher.Artifacts)
+    ├── MainForm.cs                  (DockManager left + DocumentManager tabbed view +
+    │                                 GridControl bound to ArtifactWatcher.Artifacts;
+    │                                 header with Compare + Change… buttons)
     ├── Models/Artifact.cs
     ├── Services/
-    │   ├── ArtifactWatcher.cs       (FileSystemWatcher → BindingList,
-    │   │                             title sniffing, retry on lock)
-    │   ├── MarkdownRenderer.cs      (Markdig + broadsheet CSS)
+    │   ├── ArtifactWatcher.cs       (FileSystemWatcher → BindingList; title sniffing;
+    │   │                             retry on lock; raises ArtifactUpdated event)
+    │   ├── MarkdownRenderer.cs      (Markdig + broadsheet CSS theme)
     │   └── Settings.cs              (%LOCALAPPDATA%\ClaudeViewer\settings.json)
-    └── Controls/ArtifactForm.cs     (XtraForm hosting WebView2; MDI child)
+    └── Controls/
+        ├── ArtifactPanel.cs         (UserControl: WebView2 + Markdown rendering — the reusable core)
+        ├── ArtifactForm.cs          (XtraForm shell hosting one ArtifactPanel; MDI child)
+        └── CompareForm.cs           (XtraForm with stock SplitContainer Orientation.Vertical;
+                                      two ArtifactPanels with file-name labels above each pane)
 ```
 
-### Behaviour wired
+## Behaviour wired
 
 - Default watch folder: `C:\Projects\.artifacts` (created on first run).
 - `CLAUDE_VIEWER_DIR` env var overrides the folder and **disables** the
-  picker (with tooltip explaining why) so a launcher override can't be
+  picker (with tooltip explaining why), so a launcher override can't be
   silently overwritten by a click.
-- `Change…` button → stock `FolderBrowserDialog` (modern Windows shell
-  picker on .NET 6+; DevExpress doesn't ship a folder picker).
-- File overwrite while a tab is open → tab auto-reloads via the
-  `ArtifactUpdated` event.
-- Reads use `FileShare.ReadWrite | FileShare.Delete` + retry, so opening a
-  file Claude Code is mid-writing doesn't crash.
+- `Change…` button → stock `FolderBrowserDialog` (modern shell picker on
+  .NET 6+; DevExpress doesn't ship a folder picker — only file pickers).
+- Folder choice persists to `%LOCALAPPDATA%\ClaudeViewer\settings.json`.
+- Grid: `MultiSelect = true`, `MultiSelectMode = RowSelect`. `Compare`
+  button is disabled until exactly two rows are selected; tooltip explains
+  the gating in either state.
+- Compare → opens a new MDI tab with a vertical-splitter `SplitContainer`
+  (`Orientation.Vertical`) → panels left/right; one `ArtifactPanel` per
+  side with a small file-name/title label header; splitter centres at
+  half-width on first show.
+- Live-reload: `ArtifactWatcher.ArtifactUpdated` fires on any tracked
+  file change; both single-file tabs (`_openTabs`) and compare tabs
+  (`_openCompareTabs`) refresh the matching side(s).
+- File reads use `FileShare.ReadWrite | FileShare.Delete` + 4-attempt
+  retry, so opening a file Claude Code is mid-writing doesn't crash.
 
-## Verification
+## Verification status
 
-- `dotnet build` → 0 warnings, 0 errors.
-- Smoke-tested startup: PID stays alive past 3 s and no crash dialog.
-- **Not yet tested:** picking a new folder at runtime, switching watcher,
-  live-reload of an in-flight Claude Code write, the broadsheet Markdown
-  CSS rendering on real content.
+| Confirmed | How |
+|---|---|
+| `dotnet build` is clean (0 warnings, 0 errors) | last run after each file change |
+| App launches and stays alive ≥ 3 s | `Start-Process` smoke test |
 
-## Decisions made (and why)
+| **Not** yet confirmed visually | Why it matters |
+|---|---|
+| Split layout actually renders left/right (not top/bottom) | Code says `Orientation.Vertical`. Flip to `Horizontal` if it comes up wrong (one line in `Controls/CompareForm.cs:11`). |
+| Compare button enables on multi-select selection change | Wired to `GridView.SelectionChanged`; relies on event firing as expected. |
+| Live-reload through the compare path end-to-end | Needs Claude Code pointed at the watched folder while a compare tab is open. |
+| Folder picker switches the watcher cleanly | Disposes/recreates the watcher; should work but unverified at runtime. |
+| Markdown CSS rendering on real content | The broadsheet theme falls back to Georgia/Consolas if the Google Fonts aren't available — fine but unverified. |
 
-- **DevExpress.Win meta-package** instead of thin slices. Trades a heavier
-  reference graph for one line in the csproj; easy to thin-slice later.
-  See comment in `ClaudeViewer.csproj`.
-- **`BonusSkins.Register()` removed.** That helper lives in the separate
-  `DevExpress.BonusSkins` assembly which the meta package doesn't pull.
-  Default `WXICompact` skin loads fine without it.
-- **High-DPI via `<ApplicationHighDpiMode>` csproj property** instead of
-  manifest entries — manifest-based DPI conflicts with the modern
-  `Application.SetHighDpiMode` path WinForms uses on .NET 6+.
-- **Stock `FolderBrowserDialog`** instead of a hypothetical
-  `XtraFolderBrowserDialog` (which doesn't exist; DevExpress only ships
-  `XtraOpenFileDialog` / `XtraSaveFileDialog`).
+## Decisions worth remembering
 
-## Next session — pick up at
+- **`DevExpress.Win` meta-package** instead of thin slices. Heavier graph
+  but one line in csproj. Easy to thin-slice later if the build feels slow.
+- **`BonusSkins.Register()` removed.** Lives in a separate
+  `DevExpress.BonusSkins` assembly the meta package doesn't pull. Default
+  `WXICompact` is fine without it.
+- **High-DPI via `<ApplicationHighDpiMode>` csproj property**, not manifest.
+  Manifest entries trigger WFO0003 on .NET 6+ WinForms.
+- **Stock `FolderBrowserDialog`** rather than a hypothetical
+  `XtraFolderBrowserDialog` (doesn't exist; DX only ships file pickers).
+  Modern Vista-style shell dialog on .NET 6+.
+- **Stock `SplitContainer`** in `CompareForm` rather than DevExpress
+  `SplitContainerControl`. The `Horizontal` boolean is ambiguously named;
+  `SplitContainer.Orientation` is unambiguous — stick with stock there.
+- **Reusable `ArtifactPanel` UserControl** holds the WebView2 + Markdown
+  pipeline; `ArtifactForm` and `CompareForm` are thin hosts. Future
+  features (frontmatter, themes, etc.) belong in `ArtifactPanel`.
+- **Parallel collections for tab tracking:** `_openTabs` (single-file,
+  keyed by full path) and `_openCompareTabs` (list of compare forms, with
+  a `Mentions(fullPath)` predicate). The single-file dict gives O(1)
+  reuse on double-click; the compare list is small enough that linear
+  scan is fine.
 
-1. Implement **compare mode** (top entry in `TODO.md`). The grid already
-   supports multi-select; flip `OptionsSelection.MultiSelect = true`, add
-   a "Compare" button to the header strip alongside "Change…", and on
-   click open a new tab whose root is a `SplitContainer` with two
-   `ArtifactForm`-equivalent panels side by side.
-2. Or add the **filter / search box** — smaller change, immediate payoff.
-3. Once one of those is in, exercise the **live-reload path** end-to-end
-   by pointing Claude Code at the watched folder and asking it to
-   regenerate `artifact-demo.html` (lives at `C:\Projects\artifact-demo.html`
-   from the prior conversation — could be moved into `.artifacts\` to use
-   as a fixture).
+## Pick up next at
+
+1. **Filter / search box** above the grid (now top of TODO). Smaller
+   change than compare mode and immediately useful once the folder has
+   more than a dozen artifacts.
+2. **Actually exercise compare mode** end-to-end — open the app, drop two
+   different `.html` files into `C:\Projects\.artifacts\`, multi-select
+   them, click Compare. Confirm split orientation, button gating, and
+   live-reload on overwrite of one side. Move the existing
+   `C:\Projects\artifact-demo.html` into the folder as a fixture.
+3. **Frontmatter parsing** in `ArtifactWatcher` — if Markdown starts with
+   `---` … `---` YAML, surface `title`, `prompt`, `tags` as columns.
+   Lets Claude Code stamp metadata that's actually useful in the grid.
+
+See `TODO.md` for the full prioritized list (compare mode is now in the
+"Done" section there).
 
 ## Known caveats
 
-- DevExpress version `25.2.5` is pinned; bump if the licensed install on
-  this machine differs. NuGet restore will fail loud if it's wrong.
-- The Markdown CSS references Fraunces / Newsreader / JetBrains Mono via
-  fallback chains. WebView2 has no internet here, so it'll fall back to
-  Georgia / Consolas — fine, but the HTML artifact at
-  `C:\Projects\artifact-demo.html` does load Google Fonts so it'll look
-  different from inline-rendered Markdown.
-
-## Repo
-
-`https://github.com/MBrekhof/ClaudeViewer` (private, `main`).
+- DevExpress version `25.2.5` is pinned. Bump if the licensed install on
+  this machine differs — NuGet restore will fail loud if it's wrong.
+- The Markdown CSS uses Fraunces / Newsreader / JetBrains Mono with
+  fallbacks. WebView2 has no enforced internet here; falls back to
+  Georgia / Consolas. The standalone HTML at `C:\Projects\artifact-demo.html`
+  *does* fetch Google Fonts, so it'll look different from inline-rendered
+  Markdown when offline.
+- LF→CRLF git warnings on commit are noise (Windows default `core.autocrlf`)
+  — not worth a `.gitattributes` for a one-developer repo.
