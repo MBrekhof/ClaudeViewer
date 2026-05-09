@@ -1,12 +1,14 @@
 using ClaudeViewer.Controls;
 using ClaudeViewer.Models;
 using ClaudeViewer.Services;
+using DevExpress.Data;
 using DevExpress.XtraBars.Docking;
 using DevExpress.XtraBars.Docking2010;
 using DevExpress.XtraBars.Docking2010.Views;
 using DevExpress.XtraBars.Docking2010.Views.Tabbed;
 using DevExpress.XtraEditors;
 using DevExpress.XtraGrid;
+using DevExpress.XtraGrid.Views.Base;
 using DevExpress.XtraGrid.Views.Grid;
 
 namespace ClaudeViewer;
@@ -22,8 +24,10 @@ public sealed class MainForm : XtraForm
     private readonly GridControl _grid = new() { Dock = DockStyle.Fill };
     private readonly GridView _gridView = new();
     private readonly Dictionary<string, ArtifactForm> _openTabs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<CompareForm> _openCompareTabs = new();
     private readonly Settings _settings;
     private readonly LabelControl _folderLabel;
+    private readonly SimpleButton _compareBtn;
     private readonly bool _envVarOverride;
 
     private ArtifactWatcher _watcher;
@@ -45,11 +49,12 @@ public sealed class MainForm : XtraForm
         _dockManager.Form = this;
         _leftPanel = _dockManager.AddPanel(DockingStyle.Left);
         _leftPanel.Text = "Artifacts";
-        _leftPanel.Width = 340;
+        _leftPanel.Width = 360;
         _leftPanel.Options.ShowCloseButton = false;
         _leftPanel.Options.ShowAutoHideButton = false;
 
-        // Header strip: folder label + "Change…" button
+        // Header strip: folder label + Compare + Change buttons.
+        // Right-docked controls dock in reverse order — last added is rightmost.
         var header = new PanelControl
         {
             Dock = DockStyle.Top,
@@ -57,11 +62,22 @@ public sealed class MainForm : XtraForm
             BorderStyle = DevExpress.XtraEditors.Controls.BorderStyles.NoBorder,
         };
 
+        _compareBtn = new SimpleButton
+        {
+            Text = "Compare",
+            Dock = DockStyle.Right,
+            Width = 86,
+            Margin = new Padding(0),
+            Enabled = false,
+        };
+        _compareBtn.Click += (_, _) => CompareSelected();
+        _compareBtn.ToolTip = "Select two rows in the list to enable.";
+
         var changeBtn = new SimpleButton
         {
             Text = "Change…",
             Dock = DockStyle.Right,
-            Width = 96,
+            Width = 86,
             Margin = new Padding(0),
         };
         changeBtn.Click += (_, _) => ChooseFolder();
@@ -83,9 +99,9 @@ public sealed class MainForm : XtraForm
         _folderLabel.ToolTip = _artifactDirectory;
 
         header.Controls.Add(_folderLabel);
-        header.Controls.Add(changeBtn);
+        header.Controls.Add(_compareBtn);   // docks first → leftmost of the right group
+        header.Controls.Add(changeBtn);     // docks last → rightmost
 
-        // Order matters: add the Fill control first, then the Top control
         _leftPanel.Controls.Add(_grid);
         _leftPanel.Controls.Add(header);
 
@@ -93,10 +109,15 @@ public sealed class MainForm : XtraForm
         _gridView.OptionsView.ShowGroupPanel = false;
         _gridView.OptionsView.ShowIndicator = false;
         _gridView.OptionsBehavior.Editable = false;
-        _gridView.OptionsSelection.MultiSelect = false;
         _gridView.OptionsView.RowAutoHeight = false;
+
+        // Multi-select for compare mode.
+        _gridView.OptionsSelection.MultiSelect = true;
+        _gridView.OptionsSelection.MultiSelectMode = GridMultiSelectMode.RowSelect;
+
         _gridView.RowClick += (_, e) => OpenAtRow(e.RowHandle);
         _gridView.DoubleClick += (_, _) => OpenAtRow(_gridView.FocusedRowHandle);
+        _gridView.SelectionChanged += OnGridSelectionChanged;
 
         _documentManager.MdiParent = this;
         _documentManager.View = _tabbedView;
@@ -140,6 +161,15 @@ public sealed class MainForm : XtraForm
 
         var sizeCol = _gridView.Columns.AddVisible(nameof(Artifact.SizeDisplay), "Size");
         sizeCol.Width = 60;
+    }
+
+    private void OnGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        var count = _gridView.GetSelectedRows().Count(rh => rh >= 0);
+        _compareBtn.Enabled = count == 2;
+        _compareBtn.ToolTip = count == 2
+            ? "Open the two selected artifacts side by side."
+            : "Select two rows in the list to enable.";
     }
 
     private void ChooseFolder()
@@ -205,6 +235,37 @@ public sealed class MainForm : XtraForm
         _ = form.LoadAsync(a);
     }
 
+    private void CompareSelected()
+    {
+        var selected = _gridView.GetSelectedRows()
+            .Where(rh => rh >= 0)
+            .Select(rh => _gridView.GetRow(rh))
+            .OfType<Artifact>()
+            .ToArray();
+
+        if (selected.Length != 2)
+        {
+            XtraMessageBox.Show(
+                this,
+                "Select exactly two artifacts in the list to compare.",
+                "Compare",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        OpenCompare(selected[0], selected[1]);
+    }
+
+    private void OpenCompare(Artifact left, Artifact right)
+    {
+        var form = new CompareForm { MdiParent = this };
+        _openCompareTabs.Add(form);
+        form.FormClosed += (_, _) => _openCompareTabs.Remove(form);
+        form.Show();
+        _ = form.LoadAsync(left, right);
+    }
+
     private void ActivateForm(Form form)
     {
         foreach (BaseDocument doc in _tabbedView.Documents)
@@ -221,6 +282,10 @@ public sealed class MainForm : XtraForm
     {
         if (_openTabs.TryGetValue(a.FullPath, out var form) && !form.IsDisposed)
             _ = form.LoadAsync(a);
+
+        foreach (var compare in _openCompareTabs.ToArray())
+            if (!compare.IsDisposed && compare.Mentions(a.FullPath))
+                _ = compare.RefreshIfMatchesAsync(a);
     }
 
     private void OnTabClosed(object? sender, DocumentEventArgs e)

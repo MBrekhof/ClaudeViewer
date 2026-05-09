@@ -1,7 +1,38 @@
 # Session Handoff
 
 **Last session:** 2026-05-09
-**Status:** Initial scaffold pushed to private GitHub repo. Builds clean, launches clean.
+**Status:** Scaffold + compare mode pushed to private GitHub repo. Builds clean, launches clean.
+
+## Latest delta — compare mode
+
+- New `Controls/ArtifactPanel.cs` — extracted the WebView2 + Markdown
+  rendering logic out of `ArtifactForm` into a reusable `UserControl` so it
+  can be embedded in any container (e.g. a split view).
+- `Controls/ArtifactForm.cs` is now a thin `XtraForm` host around a single
+  `ArtifactPanel`. Public surface is unchanged.
+- New `Controls/CompareForm.cs` — `XtraForm` with a stock
+  `SplitContainer` (`Orientation.Vertical` → splitter is vertical, panels
+  are left/right). Two `ArtifactPanel`s with small file-name/title labels
+  above each pane. Splitter centred at `Width / 2` on first show.
+- `MainForm`:
+  - Grid now `MultiSelect = true`, `MultiSelectMode = RowSelect`.
+  - "Compare" button added to the header strip, leftmost of the right group
+    next to "Change…". Disabled until exactly 2 rows are selected; tooltip
+    explains the gating in both states.
+  - `_openCompareTabs` list parallels `_openTabs`. `OnArtifactUpdated`
+    iterates open compare tabs and refreshes the side(s) that match the
+    changed file.
+  - `XtraMessageBox` belt-and-braces if `CompareSelected()` runs without 2
+    rows (shouldn't happen given the gating, but cheap insurance).
+
+### Not yet visually verified
+
+- That the split is actually left/right (the code says so, but I have not
+  eyeballed it — flip `Orientation` if it comes up top/bottom).
+- That the Compare button enable/disable transitions cleanly with grid
+  selection changes in practice.
+- Live-reload through the compare path end-to-end — needs Claude Code
+  pointed at the watched folder + a re-write of one of two compared files.
 
 ## What exists
 

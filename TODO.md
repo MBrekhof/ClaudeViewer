@@ -2,12 +2,15 @@
 
 Open work for Claude Viewer, ordered roughly by usefulness.
 
+## Done
+
+- [x] **Compare mode.** Multi-select two rows in the grid → opens a tab with
+  a vertical-splitter `SplitContainer` and an `ArtifactPanel` per side, both
+  wired into the live-reload path. `ArtifactForm` was refactored to host a
+  reusable `ArtifactPanel` so the compare tab can re-use the same renderer.
+
 ## Next up
 
-- [ ] **Compare mode.** Multi-select two rows in the grid → open a doc with a
-  vertical `SplitContainer` and one `WebView2` per side. The "version A vs
-  version B" view was the original argument for building a tool instead of
-  using `live-server`.
 - [ ] **Filter / search box** above the grid. `IncrementalSearch` on the
   `GridView` plus a text box that narrows by file name and title.
 - [ ] **Frontmatter parsing.** If a Markdown file starts with a YAML
