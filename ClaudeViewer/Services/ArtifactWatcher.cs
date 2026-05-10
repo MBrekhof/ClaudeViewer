@@ -9,21 +9,23 @@ public sealed partial class ArtifactWatcher : IDisposable
     private readonly FileSystemWatcher _watcher;
     private readonly SynchronizationContext _ui;
     private readonly string _root;
+    private readonly bool _recursive;
 
     public BindingList<Artifact> Artifacts { get; } = new();
 
     public event Action<Artifact>? ArtifactUpdated;
 
-    public ArtifactWatcher(string rootDirectory, SynchronizationContext uiContext)
+    public ArtifactWatcher(string rootDirectory, SynchronizationContext uiContext, bool recursive)
     {
         _root = rootDirectory;
         _ui = uiContext;
+        _recursive = recursive;
         Directory.CreateDirectory(rootDirectory);
 
         _watcher = new FileSystemWatcher(rootDirectory)
         {
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-            IncludeSubdirectories = true,
+            IncludeSubdirectories = recursive,
             EnableRaisingEvents = true,
         };
         _watcher.Created += OnTouched;
@@ -36,8 +38,9 @@ public sealed partial class ArtifactWatcher : IDisposable
 
     private void SeedExisting()
     {
+        var search = _recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var files = new DirectoryInfo(_root)
-            .EnumerateFiles("*.*", SearchOption.AllDirectories)
+            .EnumerateFiles("*.*", search)
             .Where(IsTracked)
             .OrderByDescending(f => f.LastWriteTime);
 
@@ -48,7 +51,7 @@ public sealed partial class ArtifactWatcher : IDisposable
     private static bool IsTracked(FileInfo f) =>
         f.Extension.ToLowerInvariant() is ".html" or ".htm" or ".md" or ".markdown";
 
-    private static Artifact MakeArtifact(FileInfo f)
+    private Artifact MakeArtifact(FileInfo f)
     {
         var kind = f.Extension.ToLowerInvariant() switch
         {
@@ -64,7 +67,15 @@ public sealed partial class ArtifactWatcher : IDisposable
             Kind = kind,
             SizeBytes = f.Length,
             Title = TryReadTitle(f, kind),
+            Folder = RelativeFolder(f),
         };
+    }
+
+    private string RelativeFolder(FileInfo f)
+    {
+        var dir = f.DirectoryName ?? _root;
+        var rel = Path.GetRelativePath(_root, dir);
+        return rel == "." ? "" : rel;
     }
 
     private static string? TryReadTitle(FileInfo f, ArtifactKind kind)

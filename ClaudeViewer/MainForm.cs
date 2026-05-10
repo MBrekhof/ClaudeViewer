@@ -28,6 +28,7 @@ public sealed class MainForm : XtraForm
     private readonly Settings _settings;
     private readonly LabelControl _folderLabel;
     private readonly SimpleButton _compareBtn;
+    private readonly CheckEdit _recursiveCheck;
     private readonly bool _envVarOverride;
 
     private ArtifactWatcher _watcher;
@@ -87,6 +88,19 @@ public sealed class MainForm : XtraForm
             changeBtn.ToolTip = $"Locked by {ArtifactDirectoryEnvVar} environment variable.";
         }
 
+        _recursiveCheck = new CheckEdit
+        {
+            Text = "Recursive",
+            Dock = DockStyle.Right,
+            Width = 90,
+            Margin = new Padding(0),
+        };
+        _recursiveCheck.Properties.Caption = "Recursive";
+        _recursiveCheck.Properties.AllowFocused = false;
+        _recursiveCheck.Checked = _settings.Recursive;
+        _recursiveCheck.ToolTip = "Include files in subfolders. Off matches Explorer's top-level view.";
+        _recursiveCheck.CheckedChanged += (_, _) => OnRecursiveToggled();
+
         _folderLabel = new LabelControl
         {
             Dock = DockStyle.Fill,
@@ -99,14 +113,15 @@ public sealed class MainForm : XtraForm
         _folderLabel.ToolTip = _artifactDirectory;
 
         header.Controls.Add(_folderLabel);
-        header.Controls.Add(_compareBtn);   // docks first → leftmost of the right group
-        header.Controls.Add(changeBtn);     // docks last → rightmost
+        header.Controls.Add(_recursiveCheck); // docks first → leftmost of the right group
+        header.Controls.Add(_compareBtn);
+        header.Controls.Add(changeBtn);       // docks last → rightmost
 
         _leftPanel.Controls.Add(_grid);
         _leftPanel.Controls.Add(header);
 
         _grid.MainView = _gridView;
-        _gridView.OptionsView.ShowGroupPanel = false;
+        _gridView.OptionsView.ShowGroupPanel = true;
         _gridView.OptionsView.ShowIndicator = false;
         _gridView.OptionsBehavior.Editable = false;
         _gridView.OptionsView.RowAutoHeight = false;
@@ -136,9 +151,25 @@ public sealed class MainForm : XtraForm
 
     private ArtifactWatcher CreateWatcher(string directory)
     {
-        var w = new ArtifactWatcher(directory, SynchronizationContext.Current!);
+        var w = new ArtifactWatcher(directory, SynchronizationContext.Current!, _settings.Recursive);
         w.ArtifactUpdated += OnArtifactUpdated;
         return w;
+    }
+
+    private void RebuildWatcher()
+    {
+        _watcher.ArtifactUpdated -= OnArtifactUpdated;
+        _watcher.Dispose();
+        _watcher = CreateWatcher(_artifactDirectory);
+        _grid.DataSource = _watcher.Artifacts;
+    }
+
+    private void OnRecursiveToggled()
+    {
+        if (_settings.Recursive == _recursiveCheck.Checked) return;
+        _settings.Recursive = _recursiveCheck.Checked;
+        _settings.Save();
+        RebuildWatcher();
     }
 
     private void ConfigureGridColumns()
@@ -150,6 +181,9 @@ public sealed class MainForm : XtraForm
 
         var fileCol = _gridView.Columns.AddVisible(nameof(Artifact.FileName), "File");
         fileCol.Width = 140;
+
+        var folderCol = _gridView.Columns.AddVisible(nameof(Artifact.Folder), "Folder");
+        folderCol.Width = 140;
 
         var kindCol = _gridView.Columns.AddVisible(nameof(Artifact.KindDisplay), "Kind");
         kindCol.Width = 50;
@@ -193,9 +227,6 @@ public sealed class MainForm : XtraForm
         if (string.IsNullOrWhiteSpace(newPath)) return;
         if (string.Equals(newPath, _artifactDirectory, StringComparison.OrdinalIgnoreCase)) return;
 
-        _watcher.ArtifactUpdated -= OnArtifactUpdated;
-        _watcher.Dispose();
-
         _artifactDirectory = newPath;
         _settings.ArtifactDirectory = newPath;
         _settings.Save();
@@ -204,8 +235,7 @@ public sealed class MainForm : XtraForm
         _folderLabel.Text = newPath;
         _folderLabel.ToolTip = newPath;
 
-        _watcher = CreateWatcher(newPath);
-        _grid.DataSource = _watcher.Artifacts;
+        RebuildWatcher();
     }
 
     private void OpenAtRow(int rowHandle)

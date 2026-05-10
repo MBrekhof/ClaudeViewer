@@ -55,13 +55,13 @@ reference that path and tells them to reload. That's the whole app.
 | File | Responsibility |
 |---|---|
 | `Program.cs` | Set DevExpress skin, run `MainForm`. Nothing else. |
-| `MainForm.cs` | Owns the watcher, the grid, the tab host, and the dictionaries that map open file paths → tab forms. All wiring lives here. |
-| `Models/Artifact.cs` | Immutable record-ish DTO for a tracked file. `KindDisplay` / `SizeDisplay` exist purely so the grid can bind directly without converters. |
-| `Services/ArtifactWatcher.cs` | Watches one folder, exposes `BindingList<Artifact>`, raises `ArtifactUpdated`. Title sniffing + locked-file tolerance live here. |
+| `MainForm.cs` | Owns the watcher, the grid, the tab host, and the dictionaries that map open file paths → tab forms. All wiring lives here. `RebuildWatcher()` is the single helper used by both folder-change and recursive-toggle paths. |
+| `Models/Artifact.cs` | Immutable record-ish DTO for a tracked file. `Folder` is the path relative to the watched root (`""` for root files). `KindDisplay` / `SizeDisplay` exist purely so the grid can bind directly without converters. |
+| `Services/ArtifactWatcher.cs` | Watches one folder, exposes `BindingList<Artifact>`, raises `ArtifactUpdated`. Ctor takes `bool recursive` which controls both `IncludeSubdirectories` and the seed enumeration's `SearchOption`. Computes each `Artifact.Folder` via `Path.GetRelativePath(_root, …)`. Title sniffing + locked-file tolerance live here. |
 | `Services/MarkdownRenderer.cs` | Markdig pipeline + the broadsheet CSS theme. Pure function: `(markdown, title) → html`. |
 | `Services/DiffRenderer.cs` | DiffPlex `SideBySideDiffBuilder` wrapped to produce two HTML documents (one per pane) with line-aligned diff backgrounds. Pure function: `(leftText, rightText, ...) → (leftHtml, rightHtml)`. |
 | `Services/FileReader.cs` | `ReadAllTextWithRetryAsync` with `FileShare.ReadWrite \| Delete` and a 4-attempt retry. Shared by `ArtifactPanel` and `CompareForm`. |
-| `Services/Settings.cs` | One-property JSON file for the watched-folder path. Best-effort I/O; defaults silently on read failure. |
+| `Services/Settings.cs` | Tiny JSON file for the watched-folder path and `Recursive` flag. Best-effort I/O; defaults silently on read failure. |
 | `Controls/ArtifactPanel.cs` | The reusable core. WebView2 init + two load paths: `LoadAsync(Artifact)` routes by kind (HTML navigate / Markdown render); `LoadHtmlAsync(html, source)` injects pre-rendered HTML (used by the diff path). |
 | `Controls/ArtifactForm.cs` | Thin MDI shell around one `ArtifactPanel`. |
 | `Controls/CompareForm.cs` | Two `ArtifactPanel`s in a vertical-splitter `SplitContainer`. `RenderAsync` decides between diff mode (both files MD → `DiffRenderer` + `LoadHtmlAsync` on each side) and straight render (everything else → `LoadAsync` per side, with a `changedOnly` short-circuit so a refresh only reloads the side that actually changed). |
@@ -140,6 +140,20 @@ the WFO0003 warning .NET 6+ throws when DPI is set in `app.manifest`.
 override could be silently overwritten by a user click. The Change… button
 is disabled with a tooltip explaining why.
 
+**Recursive watching is opt-in (default off).** The viewer's original use
+case is a flat artifact dump folder; pointing it at a project root with
+recursion on surfaces noisy subfolders (`.git`, `.vs`, `.claude`, etc.).
+The `Recursive` `CheckEdit` in the header persists to `settings.json` and
+calls `RebuildWatcher()` to swap the watcher in place.
+
+**Folder column + DevExpress group panel instead of a `TreeList`.** When
+recursive is on, each `Artifact` carries a `Folder` (relative path). The
+`OptionsView.ShowGroupPanel = true` setting lets the user drag the
+`Folder` column header up to get a tree-like grouped view — same grid,
+no extra component to wire. Picked over a real `TreeList` because that
+would mean rewriting selection, multi-select, compare, and find-panel
+plumbing for one signal.
+
 ## Threading model
 
 - The OS `FileSystemWatcher` callbacks fire on threadpool threads.
@@ -159,6 +173,7 @@ is disabled with a tooltip explaining why.
 | A new file kind (e.g. `.json` pretty-printed) | `ArtifactKind` enum, `ArtifactWatcher.IsTracked` + `MakeArtifact`, `ArtifactPanel.LoadAsync` switch. |
 | Frontmatter columns (title, prompt, tags) | Extend `Artifact`, parse in `ArtifactWatcher.MakeArtifact`/`TryReadTitle`, add `_gridView.Columns.AddVisible(...)` in `MainForm.ConfigureGridColumns`. |
 | Filter / search box | Don't build one. Set `_gridView.OptionsFind.AlwaysVisible = true` for the built-in find panel (cross-column substring search) and/or `_gridView.OptionsView.ShowAutoFilterRow = true` for per-column filter inputs. Both ship with DevExpress. |
+| Group by folder / kind / etc. | Already wired — `ShowGroupPanel = true`. Drag any column header to the panel above the grid. No code needed. |
 | Dark theme for Markdown | New CSS variant in `MarkdownRenderer`, switched on `UserLookAndFeel.Default.StyleChanged`. |
 | Per-row context menu (open externally, reveal, copy path) | Hook `GridView.PopupMenuShowing` in `MainForm`. |
 | Window/layout persistence | Extend `Settings` with size + dock layout; save on `FormClosing`, apply in ctor. |

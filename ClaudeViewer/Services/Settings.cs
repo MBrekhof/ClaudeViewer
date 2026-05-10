@@ -6,6 +6,8 @@ public sealed class Settings
 {
     public string ArtifactDirectory { get; set; } = @"C:\Projects\.artifacts";
 
+    public bool Recursive { get; set; } = false;
+
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ClaudeViewer",

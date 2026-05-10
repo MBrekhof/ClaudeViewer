@@ -8,6 +8,7 @@ public sealed class Artifact
     public required ArtifactKind Kind { get; init; }
     public string? Title { get; init; }
     public long SizeBytes { get; init; }
+    public string Folder { get; init; } = "";
 
     public string SizeDisplay => SizeBytes switch
     {
