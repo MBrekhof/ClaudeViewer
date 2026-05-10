@@ -1,4 +1,5 @@
 using ClaudeViewer.Models;
+using ClaudeViewer.Services;
 using DevExpress.XtraEditors;
 using DevExpress.XtraEditors.Controls;
 
@@ -61,7 +62,7 @@ public sealed class CompareForm : XtraForm
         return host;
     }
 
-    public async Task LoadAsync(Artifact left, Artifact right)
+    public Task LoadAsync(Artifact left, Artifact right)
     {
         Text = $"Compare · {left.FileName}  ⇄  {right.FileName}";
         _leftLabel.Text = FormatLabel(left);
@@ -69,21 +70,55 @@ public sealed class CompareForm : XtraForm
         _leftLabel.ToolTip = left.FullPath;
         _rightLabel.ToolTip = right.FullPath;
 
-        await Task.WhenAll(_left.LoadAsync(left), _right.LoadAsync(right));
+        return RenderAsync(left, right, changedOnly: null);
     }
 
-    public async Task RefreshIfMatchesAsync(Artifact a)
+    public Task RefreshIfMatchesAsync(Artifact a)
     {
-        if (LeftArtifact is { } l && string.Equals(l.FullPath, a.FullPath, StringComparison.OrdinalIgnoreCase))
+        var left = LeftArtifact;
+        var right = RightArtifact;
+        if (left is null || right is null) return Task.CompletedTask;
+
+        var leftMatch = string.Equals(left.FullPath, a.FullPath, StringComparison.OrdinalIgnoreCase);
+        var rightMatch = string.Equals(right.FullPath, a.FullPath, StringComparison.OrdinalIgnoreCase);
+        if (!leftMatch && !rightMatch) return Task.CompletedTask;
+
+        var newLeft = leftMatch ? a : left;
+        var newRight = rightMatch ? a : right;
+
+        if (leftMatch) _leftLabel.Text = FormatLabel(a);
+        if (rightMatch) _rightLabel.Text = FormatLabel(a);
+
+        return RenderAsync(newLeft, newRight, changedOnly: a);
+    }
+
+    private async Task RenderAsync(Artifact left, Artifact right, Artifact? changedOnly)
+    {
+        // Two MD files → side-by-side line diff.
+        // Anything else (HTML/HTML, mixed, unsupported) → straight render, mirroring single-tab behaviour.
+        if (left.Kind == ArtifactKind.Markdown && right.Kind == ArtifactKind.Markdown)
         {
-            _leftLabel.Text = FormatLabel(a);
-            await _left.LoadAsync(a);
+            var leftText = await FileReader.ReadAllTextWithRetryAsync(left.FullPath);
+            var rightText = await FileReader.ReadAllTextWithRetryAsync(right.FullPath);
+            var (leftHtml, rightHtml) = DiffRenderer.Render(
+                leftText,
+                rightText,
+                left.Title ?? left.FileName,
+                right.Title ?? right.FileName);
+            await Task.WhenAll(
+                _left.LoadHtmlAsync(leftHtml, left),
+                _right.LoadHtmlAsync(rightHtml, right));
+            return;
         }
-        if (RightArtifact is { } r && string.Equals(r.FullPath, a.FullPath, StringComparison.OrdinalIgnoreCase))
-        {
-            _rightLabel.Text = FormatLabel(a);
-            await _right.LoadAsync(a);
-        }
+
+        var tasks = new List<Task>(2);
+        if (changedOnly is null ||
+            string.Equals(changedOnly.FullPath, left.FullPath, StringComparison.OrdinalIgnoreCase))
+            tasks.Add(_left.LoadAsync(left));
+        if (changedOnly is null ||
+            string.Equals(changedOnly.FullPath, right.FullPath, StringComparison.OrdinalIgnoreCase))
+            tasks.Add(_right.LoadAsync(right));
+        await Task.WhenAll(tasks);
     }
 
     public bool Mentions(string fullPath) =>

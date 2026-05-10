@@ -1,8 +1,8 @@
 # Session Handoff
 
-**Last session:** 2026-05-09
-**Status:** Scaffold + folder picker + compare mode pushed to `MBrekhof/ClaudeViewer` (private). Builds clean, launches clean.
-**Repo:** https://github.com/MBrekhof/ClaudeViewer · `main` · last commit `015eede`
+**Last session:** 2026-05-10
+**Status:** Diff viewer for Markdown compare added (DiffPlex 1.9.0); Modified column now full datetime; ARCHITECTURE.md added. Builds clean (0 warn / 0 err) — visual verification still pending.
+**Repo:** https://github.com/MBrekhof/ClaudeViewer · `main` · last commit `015eede` (uncommitted: ARCHITECTURE.md, datetime column, diff viewer, doc updates)
 
 ## What this is
 
@@ -20,7 +20,8 @@ ClaudeViewer/
 └── ClaudeViewer/
     ├── ClaudeViewer.csproj          (net10.0-windows; DevExpress.Win 25.2.5;
     │                                 Microsoft.Web.WebView2 1.0.2792.45;
-    │                                 Markdig 0.37.0; ApplicationHighDpiMode = PerMonitorV2)
+    │                                 Markdig 0.37.0; DiffPlex 1.9.0;
+    │                                 ApplicationHighDpiMode = PerMonitorV2)
     ├── app.manifest                 (asInvoker; DPI handled via csproj, not manifest)
     ├── Program.cs                   (skin: WXICompact)
     ├── MainForm.cs                  (DockManager left + DocumentManager tabbed view +
@@ -31,12 +32,17 @@ ClaudeViewer/
     │   ├── ArtifactWatcher.cs       (FileSystemWatcher → BindingList; title sniffing;
     │   │                             retry on lock; raises ArtifactUpdated event)
     │   ├── MarkdownRenderer.cs      (Markdig + broadsheet CSS theme)
+    │   ├── DiffRenderer.cs          (DiffPlex SideBySideDiffBuilder → (leftHtml, rightHtml)
+    │   │                             code-style diff with line numbers + colored backgrounds)
+    │   ├── FileReader.cs            (shared retry-aware text reader)
     │   └── Settings.cs              (%LOCALAPPDATA%\ClaudeViewer\settings.json)
     └── Controls/
-        ├── ArtifactPanel.cs         (UserControl: WebView2 + Markdown rendering — the reusable core)
+        ├── ArtifactPanel.cs         (UserControl: WebView2 + Markdown rendering — the reusable core;
+        │                             LoadAsync routes by kind, LoadHtmlAsync injects raw HTML)
         ├── ArtifactForm.cs          (XtraForm shell hosting one ArtifactPanel; MDI child)
         └── CompareForm.cs           (XtraForm with stock SplitContainer Orientation.Vertical;
-                                      two ArtifactPanels with file-name labels above each pane)
+                                      two ArtifactPanels with file-name labels above each pane;
+                                      RenderAsync routes MD/MD → DiffRenderer, else straight render)
 ```
 
 ## Behaviour wired
@@ -70,11 +76,13 @@ ClaudeViewer/
 
 | **Not** yet confirmed visually | Why it matters |
 |---|---|
-| Split layout actually renders left/right (not top/bottom) | Code says `Orientation.Vertical`. Flip to `Horizontal` if it comes up wrong (one line in `Controls/CompareForm.cs:11`). |
+| Split layout actually renders left/right (not top/bottom) | Code says `Orientation.Vertical`. Flip to `Horizontal` if it comes up wrong (one line in `Controls/CompareForm.cs`). |
 | Compare button enables on multi-select selection change | Wired to `GridView.SelectionChanged`; relies on event firing as expected. |
 | Live-reload through the compare path end-to-end | Needs Claude Code pointed at the watched folder while a compare tab is open. |
 | Folder picker switches the watcher cleanly | Disposes/recreates the watcher; should work but unverified at runtime. |
 | Markdown CSS rendering on real content | The broadsheet theme falls back to Georgia/Consolas if the Google Fonts aren't available — fine but unverified. |
+| MD diff colours / line alignment look right | Drop two related `.md` files into the watched folder, multi-select, Compare. Expect: line numbers in left gutter, green = inserted (right side), red = deleted (left side), yellow = modified (both), faint cream = imaginary padding for alignment. |
+| Modified column displays full datetime, not just `HH:mm` | Was `HH:mm:ss`, now `yyyy-MM-dd HH:mm` with `Width = 130`. |
 
 ## Decisions worth remembering
 
@@ -102,17 +110,20 @@ ClaudeViewer/
 
 ## Pick up next at
 
-1. **Filter / search box** above the grid (now top of TODO). Smaller
-   change than compare mode and immediately useful once the folder has
-   more than a dozen artifacts.
-2. **Actually exercise compare mode** end-to-end — open the app, drop two
-   different `.html` files into `C:\Projects\.artifacts\`, multi-select
-   them, click Compare. Confirm split orientation, button gating, and
-   live-reload on overwrite of one side. Move the existing
-   `C:\Projects\artifact-demo.html` into the folder as a fixture.
+1. **Eyeball the new diff view.** Drop two related `.md` files into the
+   watched folder, Compare. Confirm colours, alignment, and that
+   live-reload still routes correctly when one side is overwritten
+   (the diff has to *recompute*, not just refresh one side).
+2. **Expose the built-in find panel.** One-line change in `MainForm.cs`:
+   `_gridView.OptionsFind.AlwaysVisible = true` (DevExpress ships the
+   search box; no custom UI needed — see memory note).
 3. **Frontmatter parsing** in `ArtifactWatcher` — if Markdown starts with
    `---` … `---` YAML, surface `title`, `prompt`, `tags` as columns.
    Lets Claude Code stamp metadata that's actually useful in the grid.
+4. **Diff polish**: synchronized scroll between the two panes,
+   intra-line highlighting on `Modified` rows (DiffPlex provides
+   `SubPieces` already; we ignore them), and an HTML source-level
+   diff toggle. All in the Polish section of TODO.
 
 See `TODO.md` for the full prioritized list (compare mode is now in the
 "Done" section there).

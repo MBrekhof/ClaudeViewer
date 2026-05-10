@@ -39,7 +39,7 @@ public sealed class ArtifactPanel : UserControl
                 _web.CoreWebView2.Navigate(new Uri(a.FullPath).AbsoluteUri);
                 break;
             case ArtifactKind.Markdown:
-                var md = await ReadAllTextWithRetryAsync(a.FullPath);
+                var md = await FileReader.ReadAllTextWithRetryAsync(a.FullPath);
                 _web.NavigateToString(MarkdownRenderer.ToHtml(md, a.Title ?? a.FileName));
                 break;
             default:
@@ -49,27 +49,18 @@ public sealed class ArtifactPanel : UserControl
         }
     }
 
+    public async Task LoadHtmlAsync(string html, Artifact source)
+    {
+        Current = source;
+
+        if (!_ready)
+            await _web.EnsureCoreWebView2Async();
+
+        _web.NavigateToString(html);
+    }
+
     public Task ReloadAsync() =>
         Current is null ? Task.CompletedTask : LoadAsync(Current);
-
-    private static async Task<string> ReadAllTextWithRetryAsync(string path)
-    {
-        for (var attempt = 0; attempt < 4; attempt++)
-        {
-            try
-            {
-                using var fs = new FileStream(
-                    path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var reader = new StreamReader(fs);
-                return await reader.ReadToEndAsync();
-            }
-            catch (IOException) when (attempt < 3)
-            {
-                await Task.Delay(60 * (attempt + 1));
-            }
-        }
-        return string.Empty;
-    }
 
     protected override void Dispose(bool disposing)
     {

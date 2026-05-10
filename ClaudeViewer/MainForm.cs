@@ -156,8 +156,8 @@ public sealed class MainForm : XtraForm
 
         var modCol = _gridView.Columns.AddVisible(nameof(Artifact.ModifiedAt), "Modified");
         modCol.DisplayFormat.FormatType = DevExpress.Utils.FormatType.DateTime;
-        modCol.DisplayFormat.FormatString = "HH:mm:ss";
-        modCol.Width = 70;
+        modCol.DisplayFormat.FormatString = "yyyy-MM-dd HH:mm";
+        modCol.Width = 130;
 
         var sizeCol = _gridView.Columns.AddVisible(nameof(Artifact.SizeDisplay), "Size");
         sizeCol.Width = 60;
