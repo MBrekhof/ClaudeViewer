@@ -1,0 +1,10 @@
+{
+  // top-level scalar
+  "model": "claude-sonnet-4-6",
+  /* block comment */
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)", // trailing item-level comment
+    ],
+  },
+}
