@@ -100,4 +100,17 @@ public class ClaudeSettingsMergerTests
         var leaf = list.Should().ContainSingle(r => r.KeyPath == "permissions.allow[0]").Subject;
         leaf.ParentId.Should().Be(allow.Id);
     }
+
+    [Fact]
+    public void Merge_ScopeWithParseError_EmitsSentinelRow()
+    {
+        var user = new ScopeContents(null, "Unexpected end of JSON at line 3");
+
+        var list = ClaudeSettingsMerger.Merge(Empty, user, Empty, Empty);
+
+        var sentinel = list.Should().ContainSingle().Subject;
+        sentinel.Key.Should().Be("<parse error>");
+        sentinel.Winner.Should().Be("User");
+        sentinel.User.Should().Contain("Unexpected end of JSON");
+    }
 }

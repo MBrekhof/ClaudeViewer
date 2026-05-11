@@ -98,6 +98,30 @@ public static class ClaudeSettingsMerger
             }
         }
 
+        void EmitErrorIfAny(ScopeContents sc, string scope)
+        {
+            if (sc.Error is null) return;
+            list.Add(new MergedSetting
+            {
+                Id = nextId[0]++,
+                ParentId = null,
+                Key = "<parse error>",
+                KeyPath = $"<{scope}:error>",
+                Managed = scope == "Managed" ? sc.Error : null,
+                User = scope == "User" ? sc.Error : null,
+                Project = scope == "Project" ? sc.Error : null,
+                Local = scope == "Local" ? sc.Error : null,
+                Effective = null,
+                Winner = scope,
+                IsGroup = false,
+            });
+        }
+
+        EmitErrorIfAny(managed, "Managed");
+        EmitErrorIfAny(user, "User");
+        EmitErrorIfAny(project, "Project");
+        EmitErrorIfAny(local, "Local");
+
         if (managed.Root is { } m) WalkScalars(m, "", "Managed");
         if (user.Root is { } u) WalkScalars(u, "", "User");
         if (project.Root is { } p) WalkScalars(p, "", "Project");
