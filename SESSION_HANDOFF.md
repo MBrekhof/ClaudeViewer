@@ -1,8 +1,8 @@
 # Session Handoff
 
-**Last session:** 2026-05-10
-**Status:** Recursive watch is now opt-in (default off). Folder column + DevExpress group panel added so files in subfolders are visible/groupable when recursive is on. Builds clean (0 warn / 0 err); visual verification still pending.
-**Repo:** https://github.com/MBrekhof/ClaudeViewer · `main` · last commit `22b03f5` (uncommitted: Recursive setting, Folder column, group panel, related doc updates)
+**Last session:** 2026-05-11
+**Status:** Config viewer panel feature complete on `feat/config-viewer-panel`. 11 unit tests pass (4 reader + 7 merger). Visual smoke verification pending.
+**Repo:** https://github.com/MBrekhof/ClaudeViewer · `feat/config-viewer-panel` · last commit `e8b2b7e`
 
 ## What this is
 
@@ -17,35 +17,51 @@ ClaudeViewer/
 ├── ClaudeViewer.sln
 ├── README.md · TODO.md · SESSION_HANDOFF.md · ARCHITECTURE.md
 ├── .gitignore                       (bin/, obj/, *.user, .vs/, *.suo, *.bak)
-└── ClaudeViewer/
-    ├── ClaudeViewer.csproj          (net10.0-windows; DevExpress.Win 25.2.5;
-    │                                 Microsoft.Web.WebView2 1.0.2792.45;
-    │                                 Markdig 0.37.0; DiffPlex 1.9.0;
-    │                                 ApplicationHighDpiMode = PerMonitorV2)
-    ├── app.manifest                 (asInvoker; DPI handled via csproj, not manifest)
-    ├── Program.cs                   (skin: WXICompact)
-    ├── MainForm.cs                  (DockManager left + DocumentManager tabbed view +
-    │                                 GridControl bound to ArtifactWatcher.Artifacts;
-    │                                 header with Recursive + Compare + Change… controls;
-    │                                 group panel enabled — drag a column header up to group)
-    ├── Models/Artifact.cs           (FileName, FullPath, Folder, ModifiedAt, Kind, Title, SizeBytes)
-    ├── Services/
-    │   ├── ArtifactWatcher.cs       (FileSystemWatcher → BindingList; ctor takes
-    │   │                             bool recursive; computes Folder relative to root;
-    │   │                             title sniffing; retry on lock; raises ArtifactUpdated)
-    │   ├── MarkdownRenderer.cs      (Markdig + broadsheet CSS theme)
-    │   ├── DiffRenderer.cs          (DiffPlex SideBySideDiffBuilder → (leftHtml, rightHtml)
-    │   │                             code-style diff with line numbers + colored backgrounds)
-    │   ├── FileReader.cs            (shared retry-aware text reader)
-    │   └── Settings.cs              (%LOCALAPPDATA%\ClaudeViewer\settings.json;
-    │                                 ArtifactDirectory + Recursive)
-    └── Controls/
-        ├── ArtifactPanel.cs         (UserControl: WebView2 + Markdown rendering — the reusable core;
-        │                             LoadAsync routes by kind, LoadHtmlAsync injects raw HTML)
-        ├── ArtifactForm.cs          (XtraForm shell hosting one ArtifactPanel; MDI child)
-        └── CompareForm.cs           (XtraForm with stock SplitContainer Orientation.Vertical;
-                                      two ArtifactPanels with file-name labels above each pane;
-                                      RenderAsync routes MD/MD → DiffRenderer, else straight render)
+├── ClaudeViewer/
+│   ├── ClaudeViewer.csproj          (net10.0-windows; DevExpress.Win 25.2.5;
+│   │                                 Microsoft.Web.WebView2 1.0.2792.45;
+│   │                                 Markdig 0.37.0; DiffPlex 1.9.0;
+│   │                                 ApplicationHighDpiMode = PerMonitorV2)
+│   ├── app.manifest                 (asInvoker; DPI handled via csproj, not manifest)
+│   ├── Program.cs                   (skin: WXICompact)
+│   ├── MainForm.cs                  (DockManager left + DocumentManager tabbed view +
+│   │                                 GridControl bound to ArtifactWatcher.Artifacts;
+│   │                                 header with Recursive + Compare + Config + Change… controls;
+│   │                                 group panel enabled — drag a column header up to group)
+│   ├── Models/
+│   │   ├── Artifact.cs              (FileName, FullPath, Folder, ModifiedAt, Kind, Title, SizeBytes)
+│   │   └── MergedSetting.cs         (DTO for config TreeList rows; leaf or group; no logic)
+│   ├── Services/
+│   │   ├── ArtifactWatcher.cs       (FileSystemWatcher → BindingList; ctor takes
+│   │   │                             bool recursive; computes Folder relative to root;
+│   │   │                             title sniffing; retry on lock; raises ArtifactUpdated)
+│   │   ├── MarkdownRenderer.cs      (Markdig + broadsheet CSS theme)
+│   │   ├── DiffRenderer.cs          (DiffPlex SideBySideDiffBuilder → (leftHtml, rightHtml)
+│   │   │                             code-style diff with line numbers + colored backgrounds)
+│   │   ├── FileReader.cs            (shared retry-aware text reader)
+│   │   ├── Settings.cs              (%LOCALAPPDATA%\ClaudeViewer\settings.json;
+│   │   │                             ArtifactDirectory + Recursive)
+│   │   ├── ClaudeSettingsReader.cs  (reads one settings.json; returns ScopeContents(Root, Error);
+│   │   │                             permissive JSONC via JsonDocumentOptions)
+│   │   └── ClaudeSettingsMerger.cs  (pure static: 4 ScopeContents → BindingList<MergedSetting>;
+│   │                                 scalar precedence Managed > Local > Project > User;
+│   │                                 array union; parse-error sentinel rows)
+│   └── Controls/
+│       ├── ArtifactPanel.cs         (UserControl: WebView2 + Markdown rendering — the reusable core;
+│       │                             LoadAsync routes by kind, LoadHtmlAsync injects raw HTML)
+│       ├── ArtifactForm.cs          (XtraForm shell hosting one ArtifactPanel; MDI child)
+│       ├── CompareForm.cs           (XtraForm with stock SplitContainer Orientation.Vertical;
+│       │                             two ArtifactPanels with file-name labels above each pane;
+│       │                             RenderAsync routes MD/MD → DiffRenderer, else straight render)
+│       ├── ConfigPanel.cs           (UserControl: DevExpress TreeList of MergedSetting rows;
+│       │                             LoadAsync reads 4 scopes + merges; Reload button)
+│       └── ConfigForm.cs            (XtraForm shell hosting one ConfigPanel; single-instance MDI tab)
+└── ClaudeViewer.Tests/
+    ├── ClaudeViewer.Tests.csproj    (net10.0; xUnit 2.9; FluentAssertions; references main project)
+    ├── Fixtures/                    (sample settings.json files for reader + merger tests)
+    ├── ClaudeSettingsReaderTests.cs (4 tests: happy path, missing file, malformed JSON, empty object)
+    └── ClaudeSettingsMergerTests.cs (7 tests: scalar precedence, array union, parse-error sentinel,
+                                      group rows, winner column, all-missing, mixed scopes)
 ```
 
 ## Behaviour wired
@@ -78,6 +94,11 @@ ClaudeViewer/
   (`_openCompareTabs`) refresh the matching side(s).
 - File reads use `FileShare.ReadWrite | FileShare.Delete` + 4-attempt
   retry, so opening a file Claude Code is mid-writing doesn't crash.
+- **Config tab** — opens from a "Config" button in the header strip.
+  Single-instance MDI tab; tied to the watched folder; manual Reload
+  button; per-scope columns (Managed / User / Project / Local) with
+  Effective value + Winner indicator; double-click opens the winning
+  scope's settings.json externally.
 
 ## Verification status
 
@@ -134,20 +155,15 @@ ClaudeViewer/
 
 ## Pick up next at
 
-1. **Visually verify the Recursive toggle + Folder column** — point at a
-   project root (e.g. `C:\Projects\mcpOffice`), confirm the toggled-off
-   list matches Explorer's root view, toggle on and confirm subfolder
-   files appear with `Folder` populated.
-2. **Eyeball the diff view** (still outstanding from last session). Drop
-   two related `.md` files into the watched folder, Compare. Confirm
-   colours, alignment, and that live-reload still routes correctly when
-   one side is overwritten.
-3. **Expose the built-in find panel.** One-line change in `MainForm.cs`:
-   `_gridView.OptionsFind.AlwaysVisible = true`.
-4. **Frontmatter parsing** in `ArtifactWatcher` — if Markdown starts with
-   `---` … `---` YAML, surface `title`, `prompt`, `tags` as columns.
-5. **Diff polish**: synchronized scroll, intra-line highlighting on
-   `Modified` rows, HTML source-level diff toggle.
+1. **Visually verify the Config tab** — point ClaudeViewer at
+   `C:\Projects\duetgpt` (real `.claude/settings.local.json` present),
+   click Config, walk the Task 18 checklist in
+   `docs/plans/2026-05-11-config-viewer-panel.md`.
+2. **Merge `feat/config-viewer-panel` into main** once visual
+   verification passes.
+3. Then the older outstanding items: recursive toggle eyeball test, diff
+   viewer eyeball, find panel (`_gridView.OptionsFind.AlwaysVisible = true`),
+   frontmatter parsing.
 
 See `TODO.md` for the full prioritized list.
 

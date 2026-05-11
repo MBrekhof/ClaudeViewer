@@ -11,7 +11,10 @@ a row opens an `ArtifactForm` MDI tab; selecting two rows + Compare opens a
 `CompareForm` with two panes. Both forms host the same reusable
 `ArtifactPanel` (a WebView2 + Markdown pipeline). When the watcher sees a
 file change, it raises `ArtifactUpdated`; `MainForm` looks up any tabs that
-reference that path and tells them to reload. That's the whole app.
+reference that path and tells them to reload. A separate Config tab reads the
+four Claude Code settings.json scopes (Managed/User/Project/Local), merges
+them into a `BindingList<MergedSetting>`, and displays them in a DevExpress
+`TreeList` — read-only, single-instance MDI tab.
 
 ## Component map
 
@@ -30,11 +33,16 @@ reference that path and tells them to reload. That's the whole app.
 │  │  header strip          │  │                                  │  │
 │  │   · folder label       │  │   ┌─────────────┐                │  │
 │  │   · Compare button     │  │   │ ArtifactForm│ × N            │  │
-│  │   · Change… button     │  │   │  (single)   │                │  │
-│  │  GridControl           │  │   └─────────────┘                │  │
-│  │   ↳ bound to           │  │   ┌─────────────┐                │  │
-│  │     watcher.Artifacts  │  │   │ CompareForm │ × N            │  │
-│  └────────────────────────┘  │   │  (two-pane) │                │  │
+│  │   · Config button      │  │   │  (single)   │                │  │
+│  │   · Change… button     │  │   └─────────────┘                │  │
+│  │  GridControl           │  │   ┌─────────────┐                │  │
+│  │   ↳ bound to           │  │   │ CompareForm │ × N            │  │
+│  │     watcher.Artifacts  │  │   │  (two-pane) │                │  │
+│  └────────────────────────┘  │   └─────────────┘                │  │
+│                              │   ┌─────────────┐                │  │
+│                              │   │ ConfigForm  │ × 1            │  │
+│                              │   │ (read-only  │                │  │
+│                              │   │  TreeList)  │                │  │
 │                              │   └─────────────┘                │  │
 │                              └──────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────┘
@@ -57,14 +65,18 @@ reference that path and tells them to reload. That's the whole app.
 | `Program.cs` | Set DevExpress skin, run `MainForm`. Nothing else. |
 | `MainForm.cs` | Owns the watcher, the grid, the tab host, and the dictionaries that map open file paths → tab forms. All wiring lives here. `RebuildWatcher()` is the single helper used by both folder-change and recursive-toggle paths. |
 | `Models/Artifact.cs` | Immutable record-ish DTO for a tracked file. `Folder` is the path relative to the watched root (`""` for root files). `KindDisplay` / `SizeDisplay` exist purely so the grid can bind directly without converters. |
+| `Models/MergedSetting.cs` | DTO bound to the config TreeList. One row per leaf key path, or an intermediate group row. No logic. |
 | `Services/ArtifactWatcher.cs` | Watches one folder, exposes `BindingList<Artifact>`, raises `ArtifactUpdated`. Ctor takes `bool recursive` which controls both `IncludeSubdirectories` and the seed enumeration's `SearchOption`. Computes each `Artifact.Folder` via `Path.GetRelativePath(_root, …)`. Title sniffing + locked-file tolerance live here. |
 | `Services/MarkdownRenderer.cs` | Markdig pipeline + the broadsheet CSS theme. Pure function: `(markdown, title) → html`. |
 | `Services/DiffRenderer.cs` | DiffPlex `SideBySideDiffBuilder` wrapped to produce two HTML documents (one per pane) with line-aligned diff backgrounds. Pure function: `(leftText, rightText, ...) → (leftHtml, rightHtml)`. |
 | `Services/FileReader.cs` | `ReadAllTextWithRetryAsync` with `FileShare.ReadWrite \| Delete` and a 4-attempt retry. Shared by `ArtifactPanel` and `CompareForm`. |
 | `Services/Settings.cs` | Tiny JSON file for the watched-folder path and `Recursive` flag. Best-effort I/O; defaults silently on read failure. |
+| `Services/ClaudeSettingsReader.cs` | Reads one settings.json. Returns `ScopeContents(Root, Error)`: success → Root non-null; missing file → both null; malformed → Error set. Permissive JSONC (comments + trailing commas via `JsonDocumentOptions`). |
+| `Services/ClaudeSettingsMerger.cs` | Pure static method: 4 `ScopeContents` → `BindingList<MergedSetting>` with parent/child group rows. Scalars use precedence (Managed > Local > Project > User); arrays union across scopes. Parse-error scopes emit a sentinel row. Precedence is encoded in one place (`Precedence` array). |
 | `Controls/ArtifactPanel.cs` | The reusable core. WebView2 init + two load paths: `LoadAsync(Artifact)` routes by kind (HTML navigate / Markdown render); `LoadHtmlAsync(html, source)` injects pre-rendered HTML (used by the diff path). |
 | `Controls/ArtifactForm.cs` | Thin MDI shell around one `ArtifactPanel`. |
 | `Controls/CompareForm.cs` | Two `ArtifactPanel`s in a vertical-splitter `SplitContainer`. `RenderAsync` decides between diff mode (both files MD → `DiffRenderer` + `LoadHtmlAsync` on each side) and straight render (everything else → `LoadAsync` per side, with a `changedOnly` short-circuit so a refresh only reloads the side that actually changed). |
+| `Controls/ConfigPanel.cs` + `Controls/ConfigForm.cs` | DevExpress TreeList view of merged-effective config. UserControl + thin XtraForm shell, mirroring the ArtifactPanel/ArtifactForm pattern. Single-instance MDI tab. |
 
 ## Data flow
 
@@ -146,6 +158,12 @@ recursion on surfaces noisy subfolders (`.git`, `.vs`, `.claude`, etc.).
 The `Recursive` `CheckEdit` in the header persists to `settings.json` and
 calls `RebuildWatcher()` to swap the watcher in place.
 
+**Config viewer is read-only.** Honors the "no write path" invariant. To
+edit, double-click a row to open the winning scope's settings.json in the
+OS-registered editor (`Process.Start` with `UseShellExecute=true`). A
+curated editor with LayoutControl sections + JSON fallback is a deliberate
+v2 that would relax this stance.
+
 **Folder column + DevExpress group panel instead of a `TreeList`.** When
 recursive is on, each `Artifact` carries a `Folder` (relative path). The
 `OptionsView.ShowGroupPanel = true` setting lets the user drag the
@@ -177,10 +195,13 @@ plumbing for one signal.
 | Dark theme for Markdown | New CSS variant in `MarkdownRenderer`, switched on `UserLookAndFeel.Default.StyleChanged`. |
 | Per-row context menu (open externally, reveal, copy path) | Hook `GridView.PopupMenuShowing` in `MainForm`. |
 | Window/layout persistence | Extend `Settings` with size + dock layout; save on `FormClosing`, apply in ctor. |
+| New scope source (e.g. workspace) | Add path to `ClaudeSettingsReader.Read` callsite in `ConfigPanel.LoadAsync`; add column in TreeList; extend `Precedence` array; update `ScalarAccum.Set/Get` switch; update sentinel-emission. |
 
 ## What this app deliberately doesn't do
 
-- **No write path.** It's a viewer. Claude Code writes; we read.
+- **No write path.** It's a viewer. Claude Code writes; we read. The config
+  viewer reads the four scope settings.json files but never writes — edits
+  go through the OS-registered .json editor.
 - **No DI container.** One form, three services, all `new`'d in the ctor.
   Adding a container would be more code than the savings.
 - **No MVVM.** WinForms data binding to a `BindingList` is enough; a VM

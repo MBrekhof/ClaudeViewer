@@ -15,6 +15,12 @@ Open work for Claude Viewer, ordered roughly by usefulness.
   line backgrounds and a line-number gutter. HTML / mixed pairs keep the
   current straight-render side-by-side. New files: `Services/DiffRenderer.cs`,
   `Services/FileReader.cs`. New API on `ArtifactPanel`: `LoadHtmlAsync`.
+- [x] **Config viewer panel.** Read-only DevExpress TreeList view of Claude
+  Code's merged settings across Managed/User/Project/Local scopes. New MDI
+  tab opened from a Config button. Per-scope columns + Effective + Winner.
+  Double-click a row opens the winning scope's settings.json externally.
+  Tied to the watched folder; manual Reload button. New `ClaudeViewer.Tests`
+  xUnit project covers Reader + Merger semantics with 11 passing tests.
 
 ## Next up
 
@@ -54,6 +60,24 @@ Open work for Claude Viewer, ordered roughly by usefulness.
 - [ ] Persist window size, dock layout, and last-active tab between runs.
 - [ ] Optional: register `BonusSkins` (separate `DevExpress.BonusSkins`
   assembly) for richer skin choices.
+
+## Config panel polish
+
+- [ ] **Config panel: inline editing.** Curated LayoutControl sections per
+  config family (Permissions / Hooks / Env / Model) + JSON fallback for the
+  long-tail. Would relax the no-write-path invariant; revisit only after
+  the read-only view proves valuable.
+- [ ] **Config panel: FileSystemWatcher auto-refresh.** Watch the four
+  scope settings.json files; refresh the TreeList when any changes. Today
+  it's a manual Reload button.
+- [ ] **Config panel: per-row context menu.** Copy key path, reveal in
+  Explorer, "open all 4 scope files side-by-side in compare mode".
+- [ ] **Config panel: colored chips on the Winner column.** One color per
+  scope, pair with the existing dark theme work.
+- [ ] **Config panel: `RebuildWatcher` fire-and-forget Task.** Currently
+  `_ = _configTab.Panel.LoadAsync(_watcher.Root)` silently swallows
+  exceptions (noted in Task 16 review). Either await it (would require
+  RebuildWatcher to become async) or attach an error continuation.
 
 ## Maybe / later
 
