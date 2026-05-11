@@ -26,4 +26,13 @@ public class ClaudeSettingsReaderTests
         result.Root.Should().BeNull();
         result.Error.Should().BeNull();
     }
+
+    [Fact]
+    public void Read_Malformed_ReturnsErrorMessage()
+    {
+        var result = ClaudeSettingsReader.Read(Fixture("malformed.json"));
+
+        result.Root.Should().BeNull();
+        result.Error.Should().NotBeNullOrWhiteSpace();
+    }
 }
