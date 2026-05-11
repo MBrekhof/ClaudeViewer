@@ -35,4 +35,17 @@ public class ClaudeSettingsReaderTests
         result.Root.Should().BeNull();
         result.Error.Should().NotBeNullOrWhiteSpace();
     }
+
+    [Fact]
+    public void Read_Jsonc_ParsesCommentsAndTrailingCommas()
+    {
+        var result = ClaudeSettingsReader.Read(Fixture("jsonc.json"));
+
+        result.Root.Should().NotBeNull();
+        result.Error.Should().BeNull();
+        result.Root!.Value.GetProperty("model").GetString().Should().Be("claude-sonnet-4-6");
+        result.Root!.Value
+            .GetProperty("permissions").GetProperty("allow")[0].GetString()
+            .Should().Be("Bash(npm:*)");
+    }
 }
