@@ -66,4 +66,18 @@ public class ClaudeSettingsMergerTests
         row.Winner.Should().Be("Managed");
         row.Effective.Should().Be("\"m\"");
     }
+
+    [Fact]
+    public void Merge_ArrayConcatenatedAcrossScopes_EachEntryHasOwnWinner()
+    {
+        var user = Parse("""{"permissions":{"allow":["Bash(git:*)"]}}""");
+        var project = Parse("""{"permissions":{"allow":["Bash(npm:*)"]}}""");
+
+        var list = ClaudeSettingsMerger.Merge(Empty, user, project, Empty);
+
+        var leaves = list.Where(r => !r.IsGroup && r.KeyPath.StartsWith("permissions.allow[")).ToList();
+        leaves.Should().HaveCount(2);
+        leaves.Should().ContainSingle(r => r.Winner == "User" && r.Effective == "\"Bash(git:*)\"");
+        leaves.Should().ContainSingle(r => r.Winner == "Project" && r.Effective == "\"Bash(npm:*)\"");
+    }
 }

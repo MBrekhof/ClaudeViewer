@@ -37,8 +37,31 @@ public static class ClaudeSettingsMerger
                     break;
 
                 case JsonValueKind.Array:
-                    // Arrays handled in Task 11 — placeholder for now.
-                    break;
+                    {
+                        var i = 0;
+                        foreach (var item in el.EnumerateArray())
+                        {
+                            var itemPath = $"{path}[{i}]";
+                            // Array items are emitted as standalone leaves with Winner = the contributing scope.
+                            // We do this inline instead of via the scalars dict because there's no merge — union, not winner-take-all.
+                            list.Add(new MergedSetting
+                            {
+                                Id = nextId[0]++,
+                                ParentId = null, // parent linking added in Task 12
+                                Key = $"[{i}]",
+                                KeyPath = itemPath,
+                                Managed = scope == "Managed" ? item.GetRawText() : null,
+                                User = scope == "User" ? item.GetRawText() : null,
+                                Project = scope == "Project" ? item.GetRawText() : null,
+                                Local = scope == "Local" ? item.GetRawText() : null,
+                                Effective = item.GetRawText(),
+                                Winner = scope,
+                                IsGroup = false,
+                            });
+                            i++;
+                        }
+                        break;
+                    }
 
                 default:
                     if (!scalars.TryGetValue(path, out var acc))
