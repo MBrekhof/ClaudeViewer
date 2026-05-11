@@ -80,4 +80,24 @@ public class ClaudeSettingsMergerTests
         leaves.Should().ContainSingle(r => r.Winner == "User" && r.Effective == "\"Bash(git:*)\"");
         leaves.Should().ContainSingle(r => r.Winner == "Project" && r.Effective == "\"Bash(npm:*)\"");
     }
+
+    [Fact]
+    public void Merge_NestedPath_CreatesGroupRowsAsParents()
+    {
+        var user = Parse("""{"permissions":{"allow":["Bash(git:*)"]}}""");
+
+        var list = ClaudeSettingsMerger.Merge(Empty, user, Empty, Empty);
+
+        var permissions = list.Should().ContainSingle(r => r.KeyPath == "permissions").Subject;
+        permissions.IsGroup.Should().BeTrue();
+        permissions.ParentId.Should().BeNull();
+        permissions.Winner.Should().BeEmpty();
+
+        var allow = list.Should().ContainSingle(r => r.KeyPath == "permissions.allow").Subject;
+        allow.IsGroup.Should().BeTrue();
+        allow.ParentId.Should().Be(permissions.Id);
+
+        var leaf = list.Should().ContainSingle(r => r.KeyPath == "permissions.allow[0]").Subject;
+        leaf.ParentId.Should().Be(allow.Id);
+    }
 }

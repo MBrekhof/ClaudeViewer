@@ -24,6 +24,32 @@ public static class ClaudeSettingsMerger
         // Accumulate per-scope value snippets per KeyPath
         var scalars = new Dictionary<string, ScalarAccum>(StringComparer.Ordinal);
 
+        int GetOrCreateGroup(string parentPath)
+        {
+            if (string.IsNullOrEmpty(parentPath)) return 0; // sentinel for "no parent"
+            if (pathToId.TryGetValue(parentPath, out var existing)) return existing;
+
+            // Recursively ensure grandparent exists first
+            var dotIdx = parentPath.LastIndexOf('.');
+            var bracketIdx = parentPath.LastIndexOf('[');
+            var splitIdx = Math.Max(dotIdx, bracketIdx);
+            var grandparentPath = splitIdx > 0 ? parentPath[..splitIdx] : "";
+            var grandparentId = GetOrCreateGroup(grandparentPath);
+
+            var key = splitIdx > 0 ? parentPath[(splitIdx + (parentPath[splitIdx] == '.' ? 1 : 0))..] : parentPath;
+            var id = nextId[0]++;
+            pathToId[parentPath] = id;
+            list.Add(new MergedSetting
+            {
+                Id = id,
+                ParentId = grandparentId == 0 ? null : grandparentId,
+                Key = key,
+                KeyPath = parentPath,
+                IsGroup = true,
+            });
+            return id;
+        }
+
         void WalkScalars(JsonElement el, string path, string scope)
         {
             switch (el.ValueKind)
@@ -38,6 +64,7 @@ public static class ClaudeSettingsMerger
 
                 case JsonValueKind.Array:
                     {
+                        var arrayParentId = GetOrCreateGroup(path);
                         var i = 0;
                         foreach (var item in el.EnumerateArray())
                         {
@@ -47,7 +74,7 @@ public static class ClaudeSettingsMerger
                             list.Add(new MergedSetting
                             {
                                 Id = nextId[0]++,
-                                ParentId = null, // parent linking added in Task 12
+                                ParentId = arrayParentId == 0 ? null : arrayParentId,
                                 Key = $"[{i}]",
                                 KeyPath = itemPath,
                                 Managed = scope == "Managed" ? item.GetRawText() : null,
@@ -76,14 +103,19 @@ public static class ClaudeSettingsMerger
         if (project.Root is { } p) WalkScalars(p, "", "Project");
         if (local.Root is { } l) WalkScalars(l, "", "Local");
 
-        foreach (var (path, acc) in scalars)
+        foreach (var (path, acc) in scalars.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             var winner = Precedence.FirstOrDefault(s => acc.Get(s) is not null) ?? "";
-            var key = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..] : path;
+            var dotIdx = path.LastIndexOf('.');
+            var bracketIdx = path.LastIndexOf('[');
+            var splitIdx = Math.Max(dotIdx, bracketIdx);
+            var parentPath = splitIdx > 0 ? path[..splitIdx] : "";
+            var parentId = GetOrCreateGroup(parentPath);
+            var key = splitIdx > 0 ? path[(splitIdx + (path[splitIdx] == '.' ? 1 : 0))..] : path;
             list.Add(new MergedSetting
             {
                 Id = nextId[0]++,
-                ParentId = null, // parent linking added in Task 12
+                ParentId = parentId == 0 ? null : parentId,
                 Key = key,
                 KeyPath = path,
                 Managed = acc.Managed,
