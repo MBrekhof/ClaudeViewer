@@ -25,6 +25,7 @@ public sealed class MainForm : XtraForm
     private readonly GridView _gridView = new();
     private readonly Dictionary<string, ArtifactForm> _openTabs = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<CompareForm> _openCompareTabs = new();
+    private Controls.ConfigForm? _configTab;
     private readonly Settings _settings;
     private readonly LabelControl _folderLabel;
     private readonly SimpleButton _compareBtn;
@@ -112,10 +113,19 @@ public sealed class MainForm : XtraForm
         _folderLabel.Appearance.TextOptions.VAlignment = DevExpress.Utils.VertAlignment.Center;
         _folderLabel.ToolTip = _artifactDirectory;
 
+        var configBtn = new DevExpress.XtraEditors.SimpleButton
+        {
+            Text = "Config",
+            Width = 90,
+            Dock = DockStyle.Right,
+        };
+        configBtn.Click += OnConfigClick;
+
         header.Controls.Add(_folderLabel);
         header.Controls.Add(_recursiveCheck); // docks first → leftmost of the right group
         header.Controls.Add(_compareBtn);
-        header.Controls.Add(changeBtn);       // docks last → rightmost
+        header.Controls.Add(changeBtn);
+        header.Controls.Add(configBtn);       // docks last → rightmost
 
         _leftPanel.Controls.Add(_grid);
         _leftPanel.Controls.Add(header);
@@ -162,6 +172,11 @@ public sealed class MainForm : XtraForm
         _watcher.Dispose();
         _watcher = CreateWatcher(_artifactDirectory);
         _grid.DataSource = _watcher.Artifacts;
+
+        if (_configTab is { IsDisposed: false })
+        {
+            _ = _configTab.Panel.LoadAsync(_watcher.Root);
+        }
     }
 
     private void OnRecursiveToggled()
@@ -322,5 +337,20 @@ public sealed class MainForm : XtraForm
     {
         if (e.Document.Form is ArtifactForm af && af.Current is not null)
             _openTabs.Remove(af.Current.FullPath);
+    }
+
+    private async void OnConfigClick(object? sender, EventArgs e)
+    {
+        if (_configTab is not null && !_configTab.IsDisposed)
+        {
+            _configTab.Activate();
+            return;
+        }
+
+        _configTab = new Controls.ConfigForm();
+        _configTab.FormClosed += (_, _) => _configTab = null;
+        _configTab.MdiParent = this;
+        _configTab.Show();
+        await _configTab.Panel.LoadAsync(_watcher.Root);
     }
 }

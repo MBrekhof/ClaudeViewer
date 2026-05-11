@@ -11,6 +11,8 @@ public sealed partial class ArtifactWatcher : IDisposable
     private readonly string _root;
     private readonly bool _recursive;
 
+    public string Root => _root;
+
     public BindingList<Artifact> Artifacts { get; } = new();
 
     public event Action<Artifact>? ArtifactUpdated;
