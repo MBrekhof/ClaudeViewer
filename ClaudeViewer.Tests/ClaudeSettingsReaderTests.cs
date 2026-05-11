@@ -17,4 +17,13 @@ public class ClaudeSettingsReaderTests
         result.Error.Should().BeNull();
         result.Root!.Value.GetProperty("model").GetString().Should().Be("claude-opus-4-7");
     }
+
+    [Fact]
+    public void Read_MissingFile_ReturnsMissingSentinel()
+    {
+        var result = ClaudeSettingsReader.Read(Path.Combine(AppContext.BaseDirectory, "Fixtures", "does_not_exist.json"));
+
+        result.Root.Should().BeNull();
+        result.Error.Should().BeNull();
+    }
 }
