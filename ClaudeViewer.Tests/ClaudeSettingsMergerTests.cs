@@ -34,4 +34,36 @@ public class ClaudeSettingsMergerTests
         row.Effective.Should().Be("\"claude-opus-4-7\"");
         row.IsGroup.Should().BeFalse();
     }
+
+    [Fact]
+    public void Merge_ScalarInMultipleScopes_HighestPrecedenceWins()
+    {
+        var user = Parse("""{"model":"u"}""");
+        var project = Parse("""{"model":"p"}""");
+        var local = Parse("""{"model":"l"}""");
+
+        var list = ClaudeSettingsMerger.Merge(Empty, user, project, local);
+
+        var row = list.Should().ContainSingle().Subject;
+        row.Winner.Should().Be("Local");
+        row.Effective.Should().Be("\"l\"");
+        row.User.Should().Be("\"u\"");
+        row.Project.Should().Be("\"p\"");
+        row.Local.Should().Be("\"l\"");
+    }
+
+    [Fact]
+    public void Merge_ManagedAlwaysWins_WhenAllFourSet()
+    {
+        var managed = Parse("""{"model":"m"}""");
+        var user = Parse("""{"model":"u"}""");
+        var project = Parse("""{"model":"p"}""");
+        var local = Parse("""{"model":"l"}""");
+
+        var list = ClaudeSettingsMerger.Merge(managed, user, project, local);
+
+        var row = list.Should().ContainSingle().Subject;
+        row.Winner.Should().Be("Managed");
+        row.Effective.Should().Be("\"m\"");
+    }
 }
