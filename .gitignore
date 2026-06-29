@@ -6,3 +6,4 @@ obj/
 *.bak
 excalidraw.log
 files.png
+.claude/agent-memory/
