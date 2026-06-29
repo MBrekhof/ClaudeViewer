@@ -1,8 +1,22 @@
 # Session Handoff
 
-**Last session:** 2026-05-11
-**Status:** Config viewer panel feature complete on `feat/config-viewer-panel`. 11 unit tests pass (4 reader + 7 merger). Visual smoke verification pending.
-**Repo:** https://github.com/MBrekhof/ClaudeViewer · `feat/config-viewer-panel` · last commit `e8b2b7e`
+**Last session:** 2026-06-29
+**Status:** Config viewer panel merged to `main` (11 unit tests pass: 4 reader + 7 merger). Visual smoke verification of the Config tab still pending. This session was housekeeping only — no feature code.
+**Repo:** https://github.com/MBrekhof/ClaudeViewer · `main` · last commit `71227fc` (pushed)
+
+## This session (2026-06-29)
+
+- Ran `extract-learnings` consolidation (auditor + discoverer). Result: no
+  removals/merges/new learnings; one sharpening EDIT to
+  `feedback_devexpress_builtins.md` (TreeList shares the same DX built-ins as
+  GridView — Config viewer's `ConfigPanel` uses `ShowAutoFilterRow`). Memory
+  corpus stays at 3 lean feedback entries.
+- Added `.claude/agent-memory/` to `.gitignore` (machine-local agent memory
+  must never be committed) and committed + pushed as `71227fc`.
+- Confirmed the **duetgpt MCP is read-only** (`query_knowledge` +
+  `ask_question` only — no upload/add-document tool) and **ContextBoard is a
+  kanban board, not a doc/RAG store**. Neither can ingest documents from here;
+  doc ingestion needs duetgpt's own UI/API.
 
 ## What this is
 
@@ -158,10 +172,8 @@ ClaudeViewer/
 1. **Visually verify the Config tab** — point ClaudeViewer at
    `C:\Projects\duetgpt` (real `.claude/settings.local.json` present),
    click Config, walk the Task 18 checklist in
-   `docs/plans/2026-05-11-config-viewer-panel.md`.
-2. **Merge `feat/config-viewer-panel` into main** once visual
-   verification passes.
-3. Then the older outstanding items: recursive toggle eyeball test, diff
+   `docs/plans/2026-05-11-config-viewer-panel.md`. (Merge to main already done.)
+2. Then the older outstanding items: recursive toggle eyeball test, diff
    viewer eyeball, find panel (`_gridView.OptionsFind.AlwaysVisible = true`),
    frontmatter parsing.
 
